@@ -72,7 +72,7 @@ El arreglo cambia el patrón "verificar-luego-actuar" a que la BD decida: agreg�
 - **Dónde está el arreglo:** el UNIQUE(referencia_externa) en db/schema.sqlite.sql (línea 21), la lógica en src/pagos.service.ts: el INSERT dentro de db.transaction y el catch que detecta el duplicado y devuelve la respuesta original (respuestaDePagoYaRegistrado).
 - **Dónde está la prueba:** tests/legacy.spec.ts. Primero reproduzco el patrón viejo sobre una tabla sin UNIQUE: hago los dos SELECT antes de insertar, como si llegaran dos reintentos a la vez, y el saldo baja dos veces (48M). Después corro el mismo caso contra mi implementación: llamo registrarPago dos veces con la misma referencia y el saldo baja una sola vez (49M). Que quede una sola fila (COUNT = 1) lo verifica tests/pagos.spec.ts. Uso este montaje porque better-sqlite3 es síncrono: la concurrencia la simulo con el orden de las operaciones, no con hilos reales. Antes del fix la prueba falla con Received: 48000000 (doble descuento); con el UNIQUE en la línea 21 pasa con 49M. Ambas corridas quedan en las evidencias.
 
-<img src="img/1.3failed.png" width="400" style="margin-right: 30px;" alt="Imagen 3"> <img src="img/1.3ok%20.png" width="400" alt="Imagen 3">
+<img src="img/1.3failed.png" width="400" style="margin-right: 30px;" alt="Imagen 4"> <img src="img/1.3ok%20.png" width="400" alt="Imagen 3-5">
 ---
 
 ## Parte 2 — Implementación
@@ -89,7 +89,7 @@ Cada pago que llega de la pasarela trae una `referencia_externa` única. Sobre e
 2. `INSERT` del pago con su `referencia_externa`.
 3. Si el insert tiene éxito → aplico el descuento de saldo, luego `COMMIT`.
 4. Si el insert viola la restricción `UNIQUE` → es un duplicado: `ROLLBACK` de este intento y devuelvo la respuesta de la transacción original ya persistida.
-<img src="img/idempotencia.png" width="300" style="margin-right: 15px;" alt="Imagen 1">
+<img src="img/idempotencia.png" width="450" style="margin-right: 30px;" alt="Imagen 4">
 
   
 **Por qué así y no con un `SELECT` previo:**  
@@ -100,7 +100,7 @@ El patrón "verificar-luego-actuar" (`SELECT` y después `INSERT`) tiene una ven
 El problema era usar la hora UTC del servidor para la fecha de la transaccion: un pago hecho a las 8:00 p. m. hora Colombia cae ya en el día UTC siguiente, y la póliza quedaba registrada un día después de lo real.
 
 Lo resuelvo **calculando la fecha de negocio explícitamente en `America/Bogota`** en el backend, antes de escribir nada, y tambien normalizando el mes a dos dígitos (`01`–`12`) para que el periodo sea consistente. Esa fecha ya calculada se **inyecta como parámetro** en la consulta, en lugar de dejar que la BD la genere con su propio reloj. Así la fecha de vigencia no depende ni de la zona del servidor ni del motor.
-<img src="img/zonahoraria.png" width="300" style="margin-right: 15px;" alt="Imagen 1">  
+<img src="img/zonahoraria.png" width="450" style="margin-right: 30px;" alt="Imagen 4">  
 
 - **Códigos de estado HTTP:**  
 
