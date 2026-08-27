@@ -1,36 +1,41 @@
 # Prueba técnica — Coordinación de Desarrollo
-Entrega
 
-Nombre:**Mario Alejandro Artunduaga Huertas**  
-Fecha:**26/08/2026**  
-Tiempo aproximado invertido:**4.5 horas**  
+**Mario Alejandro Artunduaga Huertas** · 26 de agosto de 2026 · Tiempo invertido: 4.5 horas
+
+## Contenido
+
+- [Parte 1 — Revisión del módulo heredado](#parte-1--revisión-del-módulo-heredado)
+- [Parte 2 — Implementación](#parte-2--implementación)
+- [Parte 3 — Decisión y coordinación](#parte-3--decisión-y-coordinación-50)
 
 ---
+
 **Stack usado y cómo se ejecuta:**
 
-Use el esqueleto entregado.
+Usé el esqueleto entregado (Node 20+, TypeScript, Express, better-sqlite3, Jest).
+Se levanta con `npm install`; las pruebas corren con `npm test` y el servidor con `npm start`.
 
 
 **Qué usé de IA y cómo lo validé:**
 
 Parte 1.  
-1. Realizé el barrido del archivo legacy/pagos.service.ts para extraer los problemas presentados en produccion para analizar impacto y posibles soluciones.La validacion se realizo verificando la slineas de codigo indicadas.  
-2. Se uso para organizar la tabla. Se valido la tabla con inspeccion visual y revisando la priorizacion segun criticidad de cada caso. 
+1. Realicé el barrido del archivo `legacy/pagos.service.ts` para extraer los problemas presentados en producción y analizar impacto y posibles soluciones. La validación se realizó verificando las líneas de código indicadas.  
+2. Se usó para organizar la tabla. La validé con inspección visual y revisando la priorización según la criticidad de cada caso. 
 
 Parte 2.  
-1. Se hizo un barrido de la DB para validar pendientes. Se valido compilacion correcta al momento de los test  
-2. Se solicito sugerencia de codigo para solición de documento src/pagos.service.ts. Se valido cumplimiento de criterios punto a punto del ejercicio propuesto.
+1. Se hizo un barrido de la base de datos para validar pendientes. Validé la compilación correcta al momento de los tests.  
+2. Se solicitó sugerencia de código para la solución de `src/pagos.service.ts`. Validé el cumplimiento de los criterios punto a punto del ejercicio propuesto.
 
 Parte 3.  
-1 Organización de texto sobre decisiones tomadas para cada caso
-
->
+1. Organización del texto sobre las decisiones tomadas para cada caso.
 
 **Qué dejé fuera y por qué:**
 
-Parte
-1.3 No ejecute el archivo heredado ya que no es ejecutable en este paso, está excluido en tsconfig, depende de NestJS/TypeORM/SQL Server no instalados, y consulta columnas que ya no existen en el esquema actual. Si se montaba ese entorno costaba más que el ejercicio completo. Las pruebas del siguiente ejercicio (tests/legacy.spec.ts) reproduce el patrón defectuoso sobre una tabla sin la restricción, el saldo baja dos veces, 48M en vez de 49M y luego ejecuta el mismo escenario contra la implementación corregida en src/pagos.service.ts, que sí descuenta una sola vez.
->
+**Parte 1.3.** No ejecuté el archivo heredado ya que no es ejecutable en este paso, está excluido en tsconfig, depende de NestJS/TypeORM/SQL Server no instalados, y consulta columnas que ya no existen en el esquema actual. Si se montaba ese entorno costaba más que el ejercicio completo. La prueba (`tests/legacy.spec.ts`) reproduce el patrón defectuoso sobre una tabla sin la restricción, el saldo baja dos veces, 48M en vez de 49M y luego ejecuta el mismo escenario contra la implementación corregida en src/pagos.service.ts, que sí descuenta una sola vez.
+
+También dejé fuera la dispersión a beneficiarios: no está entre los requisitos duros y no la verifica ninguna prueba dada. Queda documentada en la Parte 1 como defecto pendiente.
+
+Los nombres de personas en el review de la Parte 3B (Pipe, Juan, Esteban) son supuestos: el PR no indica el nombre del autor.
 
 ---
 
@@ -57,7 +62,7 @@ Parte
 
 > ¿Por qué esos van hoy y los otros no?
 
-Van **hoy** solo los cinco que pueden **mover o perder dinero real de forma irreversible en cada transacción**, sin que nadie se entere: doble cobro (1), fondos que desaparecen mientras el sistema reporta éxito (2), una puerta abierta para alterar pagos y saldos que además *ya está rompiendo* pagos legítimos (3), pólizas que quedan en mora por un desfase horario (4) y descuadres de centavos que impiden conciliar (5). Todos son daño silenciosos, presentes y difíciles de revertir; y cada hora que siguen abiertos genera un pasivo que después hay que rastrear cliente por cliente.
+Van **hoy** solo los cinco que pueden **mover o perder dinero real de forma irreversible en cada transacción**, sin que nadie se entere: doble cobro (1), fondos que desaparecen mientras el sistema reporta éxito (2), una puerta abierta para alterar pagos y saldos que además *ya está rompiendo* pagos legítimos (3), pólizas que quedan en mora por un desfase horario (4) y descuadres de centavos que impiden conciliar (5). Todos son daños silenciosos, presentes y difíciles de revertir; y cada hora que siguen abiertos genera un pasivo que después hay que rastrear cliente por cliente.
 
 Los demás duelen menos pero son contenibles. Para el **próximo ciclo** se agruparon validaciones de negocio que nos evitan fugas pero requieren definir la regla con producto (100% de porcentajes, beneficiarios inactivos, estado de póliza, saldo negativo): no las quiero improvisar. La **reserva** son mejoras de robustez, portabilidad y rendimiento (idempotencia "de manual", desacople de `GETDATE()`, N+1, tipado de fechas): no sangran dinero hoy y se pueden hacer con calma. Podemos decir: **hoy detengo la hemorragia; el resto es cirugía programada.**
 
@@ -67,7 +72,7 @@ Los demás duelen menos pero son contenibles. Para el **próximo ciclo** se agru
 
 Escogí **La primera, la idempotencia del doble cobro**, porque es el defecto de mayor impacto: es el único que pierde dinero en el flujo normal, sin ataque ni fallo de infraestructura. Además se puede demostrar de forma objetiva (el saldo baja dos veces o una), no depende de criterio.
 
-El arreglo cambia el patrón "verificar-luego-actuar" a que la BD decida: agregé una restricción UNIQUE(referencia_externa) sobre la tabla de pagos y, dentro de la transacción, hago el INSERT primero. Si llega un reintento con la misma referencia, la segunda inserción viola la restricción, la atrapo (SQLITE_CONSTRAINT_UNIQUE) y devuelvo la respuesta del pago original en lugar de descontar el saldo otra vez. Así la unicidad la garantiza el motor, no un SELECT que dos hilos pueden pasar a la vez.
+El arreglo cambia el patrón "verificar-luego-actuar" a que la BD decida: agregué una restricción UNIQUE(referencia_externa) sobre la tabla de pagos y, dentro de la transacción, hago el INSERT primero. Si llega un reintento con la misma referencia, la segunda inserción viola la restricción, la atrapo (SQLITE_CONSTRAINT_UNIQUE) y devuelvo la respuesta del pago original en lugar de descontar el saldo otra vez. Así la unicidad la garantiza el motor, no un SELECT que dos hilos pueden pasar a la vez.
 
 - **Dónde está el arreglo:** el UNIQUE(referencia_externa) en db/schema.sqlite.sql (línea 21), la lógica en src/pagos.service.ts: el INSERT dentro de db.transaction y el catch que detecta el duplicado y devuelve la respuesta original (respuestaDePagoYaRegistrado).
 - **Dónde está la prueba:** tests/legacy.spec.ts. Primero reproduzco el patrón viejo sobre una tabla sin UNIQUE: hago los dos SELECT antes de insertar, como si llegaran dos reintentos a la vez, y el saldo baja dos veces (48M). Después corro el mismo caso contra mi implementación: llamo registrarPago dos veces con la misma referencia y el saldo baja una sola vez (49M). Que quede una sola fila (COUNT = 1) lo verifica tests/pagos.spec.ts. Uso este montaje porque better-sqlite3 es síncrono: la concurrencia la simulo con el orden de las operaciones, no con hilos reales. Antes del fix la prueba falla con Received: 48000000 (doble descuento); con el UNIQUE en la línea 21 pasa con 49M. Ambas corridas quedan en las evidencias.
@@ -83,7 +88,7 @@ El arreglo cambia el patrón "verificar-luego-actuar" a que la BD decida: agreg�
   
 La garantizo en la base de datos, porque es el único punto donde la concurrencia se resuelve de forma atómica.
 
-Cada pago que llega de la pasarela trae una `referencia_externa` única. Sobre esa columna se definio una restricción `UNIQUE`, y dentro de la transacción hago el `INSERT` del pago **antes** de tocar el saldo. El flujo queda así:
+Cada pago que llega de la pasarela trae una `referencia_externa` única. Sobre esa columna definí una restricción `UNIQUE`, y dentro de la transacción hago el `INSERT` del pago **antes** de tocar el saldo. El flujo queda así:
 
 1. `BEGIN` 
 2. `INSERT` del pago con su `referencia_externa`.
@@ -97,9 +102,9 @@ El patrón "verificar-luego-actuar" (`SELECT` y después `INSERT`) tiene una ven
 
 - **Zona horaria:**
   
-El problema era usar la hora UTC del servidor para la fecha de la transaccion: un pago hecho a las 8:00 p. m. hora Colombia cae ya en el día UTC siguiente, y la póliza quedaba registrada un día después de lo real.
+El problema era usar la hora UTC del servidor para la fecha de la transacción: un pago hecho a las 8:00 p. m. hora Colombia cae ya en el día UTC siguiente, y la póliza quedaba registrada un día después de lo real.
 
-Lo resuelvo **calculando la fecha de negocio explícitamente en `America/Bogota`** en el backend, antes de escribir nada, y tambien normalizando el mes a dos dígitos (`01`–`12`) para que el periodo sea consistente. Esa fecha ya calculada se **inyecta como parámetro** en la consulta, en lugar de dejar que la BD la genere con su propio reloj. Así la fecha de vigencia no depende ni de la zona del servidor ni del motor.
+Lo resuelvo **calculando la fecha de negocio explícitamente en `America/Bogota`** en el backend, antes de escribir nada, y también normalizando el mes a dos dígitos (`01`–`12`) para que el periodo sea consistente. Esa fecha ya calculada se **inyecta como parámetro** en la consulta, en lugar de dejar que la BD la genere con su propio reloj. Así la fecha de vigencia no depende ni de la zona del servidor ni del motor.
 <img src="img/zonahoraria.png" width="450" style="margin-right: 30px;" alt="Imagen 4">  
 
 - **Códigos de estado HTTP:**  
@@ -109,14 +114,29 @@ Lo resuelvo **calculando la fecha de negocio explícitamente en `America/Bogota`
 |---|---|---|
 | Pago nuevo procesado correctamente | `201 Created` | Resultado de la transacción (id, saldo). |
 | Reintento con `referencia_externa` ya procesada | `200 OK` | La misma respuesta de la primera transacción exitosa (no un error). |
-| Regla de negocio incumplida (póliza no ACTIVA) ó datos invalidos | `422 Unprocessable Entity` | Código y mensaje de negocio. |
+| Regla de negocio incumplida (póliza no ACTIVA) o datos inválidos | `422 Unprocessable Entity` | Código y mensaje de negocio. |
 | Fallo inesperado tras `ROLLBACK` | `500 Internal Server Error` | Error genérico; nada quedó a medias gracias a la transacción. |
 
 El punto clave es el **reintento duplicado → `200`, no `409`**. Devolver un error haría que la pasarela reintentara indefinidamente; devolver la respuesta original idéntica le permite cerrar el ciclo. El `409 Conflict` se puede usar para un caso contradictorio (misma referencia, distinto monto), no para el reintento normal.
 
 - **Cambios al esquema:**
 
-Sí, édité `db/schema.sqlite.sql`. Agregué 1 linea: (28) y modifiqué 5: (21, 22, 38, 44 y 45):
+Sí, edité `db/schema.sqlite.sql`. Agregué una línea (28) y modifiqué cinco (21, 22, 38, 44 y 45):
+
+| Restricción | Qué problema evita |
+|---|---|
+| `UNIQUE` en `pagos.referencia_externa` | La idempotencia la garantiza el motor, no el código. Un `SELECT` previo no sobrevive a reintentos en paralelo. |
+| `CHECK (valor_centavos > 0)` | Un pago de cero o negativo no es un pago: es un error de origen que hoy la base aceptaría. |
+| `INDEX idx_pagos_poliza` en `pagos.poliza_id` | Es la consulta más frecuente del sistema. Sin índice, recorre la tabla completa. |
+| `CHECK (porcentaje BETWEEN 0 AND 100)` en `beneficiarios` | Un porcentaje de 500 dispersaría cinco veces el valor del pago; uno negativo restaría al beneficiario. |
+| `UNIQUE` en `cuentas_beneficiario.beneficiario_id` | El código toma `cuenta[0]` a ciegas. Con dos cuentas, el abono cae en una arbitraria y ninguna refleja el total real. |
+| `CHECK (acumulado_centavos >= 0)` | Un acumulado negativo no tiene sentido de negocio: solo puede venir de un error. |
+
+El `UNIQUE` de `referencia_externa` es el único imprescindible para los requisitos duros. Los demás formalizan reglas que el código ya asumía pero que nadie había escrito en el modelo.
+
+- **Pruebas agregadas:**
+
+Agregué en `tests/pagos.spec.ts` la prueba *"persiste el periodo en fecha de negocio de Bogotá, no la del servidor"*: congela el reloj el 16 de agosto a las 02:00 UTC (que en Bogotá todavía es el 15), con el servidor en UTC, y verifica que el periodo guardado en la fila sea `2026-08-Q1`. Las tres pruebas dadas de `periodo-corte.spec.ts` validan el método aislado; ninguna verificaba que `registrarPago` persistiera ese valor.
 
 <img src="img/evidencia3.png" width="600" style="margin-right: 40px;" alt="Imagen 6">   
 
@@ -124,32 +144,32 @@ Sí, édité `db/schema.sqlite.sql`. Agregué 1 linea: (28) y modifiqué 5: (21,
 
 ## Parte 3 — Decisión y coordinación (50%)
 
-## 3A. Nota de decisión técnica (20%)
+### 3A. Nota de decisión técnica (20%)
 
-Qué hago y en qué orden
+**Qué hago y en qué orden**
 
 Lo primero que decido hacer es paralelizar y lo divido de la siguiente manera en los sprints:
 
-- **Sprint 1  Construir la paralelización.**  
-Los dos ingenieros van a trabajan juntos sobre la misma pieza: uno es el encargado de construir, el otro apoya pero tambien revisa el desarrollo. No los separo en frentes distintos porque con un equipo de dos frentes de trabajo, dividir produce dos cosas a medias y no tenemos apoyo si uno falta.
+- **Sprint 1 — Construir la paralelización.**  
+Los dos ingenieros van a trabajar juntos sobre la misma pieza: uno se encarga de construir, el otro apoya y también revisa el desarrollo. No los separo en frentes distintos porque, con un equipo de dos personas, dividir produce dos cosas a medias y nos deja sin respaldo si uno falta.
 
 El trabajo no es solo partir los 50.000 documentos en rangos, eso nos toma tres o cuatro días. Lo que consume el sprint es el manejo de fallos parciales: qué pasa cuando un worker se cae a mitad del proceso. Sin eso estaría paralelizando un job que se sigue cayendo, y tenemos la experiencia que ya falló dos veces este mes. Al cierre del sprint 1 queda desplegado en producción.
 
-Mientras construimos esta solucion, instrumentamos: medimos el tiempo de cada worker y probamos con 2, 4 y 8. Donde la curva de eficiencia deje de mejorar está el límite serial del proceso. No estamos metiendo un sprint extra para perfilar; es el mismo trabajo, midiendo.
+Mientras construimos esta solución, instrumentamos: medimos el tiempo de cada worker y probamos con 2, 4 y 8. Donde la curva de eficiencia deje de mejorar está el límite serial del proceso. No estamos metiendo un sprint extra para perfilar; es el mismo trabajo, midiendo.
 
-- **Sprint 2  Medir en producción.**  
+- **Sprint 2 — Medir en producción.**  
 El día 15 es el corte de evaluación, con cinco corridas nocturnas acumuladas. La primera semana ajustamos el número de workers según lo que muestre la curva de eficiencia del sprint 1, y se afina el manejo de fallos con los casos reales que aparezcan, estos siempre son distintos a los previstos en pruebas.
 
 La segunda semana, con la medición en mano, se prepara la caché: medimos qué porcentaje de documentos cambia entre cortes y definimos la estrategia de invalidación. Ese dato es el que decide si la caché vale la pena. Si resulta que el 70% de los documentos cambia cada noche, la caché no sirve y hay que replantear el sprint 3 antes de empezarlo.
 
-- **Sprint 3  Caché.**
+- **Sprint 3 — Caché.**
 Si el sprint 2 mostró que la paralelización alcanzó y los documentos son estables, se implementa la caché con invalidación por hash de contenido más versión de reglas, y se agrega un muestreo del 1% revalidado en fresco cada noche para detectar divergencias.
 
 Si mostró un límite serial, este sprint se dedica a identificarlo y atacarlo. Cachear no arregla un cuello serial, y arrancarlo sabiendo eso sería gastar el último sprint disponible.
 
 En cualquiera de los dos casos dejo la última semana como margen. Un plan de tres sprints lleno al 100% con dos ingenieros es un plan que no cierra.  
 
-Qué descarté y por qué. 
+**Qué descarté y por qué**
 
 El modelo más pequeño. Es la única opción que paga un problema de capacidad con moneda de calidad. En validación documental de seguros, perder precisión tiene dos costos: documentos malos aprobados, que es exposición en siniestros y hallazgo regulatorio; y documentos buenos rechazados, que generan retrabajo manual. Ese segundo costo puede consumir más horas de operación de las que ahorra el job.
 
@@ -157,7 +177,7 @@ Lo reconsideraría solo si la medición muestra que la inferencia domina el tiem
 
 Por qué la caché va de segunda y no de primera. La paralelización no cambia ni un resultado de validación. La caché sí puede: si se invalida mal, se valida contra una versión vencida de un documento. En un sistema con exposición regulatoria, primero va lo que no puede dañar la calidad del dato; lo que sí puede, va cuando ya hay medición.
 
-Cómo sé a los 15 días si funcionó?
+**¿Cómo sé a los 15 días si funcionó?**
 
 Métrica principal: Usamos los documentos procesados por hora.
 
@@ -166,7 +186,7 @@ La meta: 14.300 doc/hora — equivale a terminar en 3,5 horas
 
 Uso la tasa y no el tiempo total porque sobrevive a los cambios de volumen: si el próximo mes son 60.000 documentos, el tiempo sube pero la tasa sigue siendo comparable.
 
-El umbral queda fijo en 3.5 para que tengamos margen de crecimiento al momento que crezca el volumen, por esto no lo dejamos ajustado en 5 horas
+El umbral queda fijo en 3,5 horas para tener margen cuando crezca el volumen; por eso no lo dejamos ajustado a las 5 horas de la ventana.
 
 Segunda métrica: cero fallos de ejecución en las corridas del periodo, contra los dos de este mes.
 
@@ -178,7 +198,7 @@ Sobre 5h → la paralelización topó contra un límite serial. Sprint 3 se dedi
 
 Con cinco corridas tenemos señal de tendencia, no una prueba estadística. Si el resultado en esa parte queda en el límite, extiendo la medición al cierre del sprint 2 antes de comprometer el sprint 3.
 
-Riesgo principal y plan B  
+**Riesgo principal y plan B**
 
 
 El riesgo es que la paralelización tope contra un límite que no se resuelve agregando workers: una fracción serial del proceso, un límite de peticiones en la API del modelo, o contención en la base de datos. En ese escenario paso dos sprints y el job sigue sin caber en la ventana.
@@ -187,19 +207,19 @@ Es el riesgo que asumo por no dedicar tiempo a perfilar antes. Lo mitigo instrum
 
 Plan B: la caché, adelantada al sprint 3 con prioridad completa. Reduce trabajo en lugar de agregar capacidad, así que no depende del límite que haya frenado a los workers. La invalidación va por hash del contenido más versión del conjunto de reglas — sin esa segunda parte, un cambio de reglas dejaría miles de validaciones viejas dadas por buenas.
 
-## 3B. Review de un PR (20%)  
+### 3B. Review de un PR (20%)  
 
 
-Hola pipe, ya le di una revisada a tu codigo. El endpoint resuelve bien lo que pidió sales y la estructura de la respuesta está ok. El filtro por activo está bien pensado, solo te falta el control de permisos.  
-Tengo algunos bloqueantes y otros que si te los dejo solo de sugerencia:  
+Hola Pipe, ya le di una revisada a tu código. El endpoint resuelve bien lo que pidió sales y la estructura de la respuesta está ok. El filtro por activo está bien pensado, solo te falta el control de permisos.  
+Te dejo unos bloqueantes y algunas sugerencias que no bloquean:  
 
 Resumiendo son dos temas solamente: parametrizar las consultas y no exponer datos personales. Los otros son validaciones cortas.
 
-Bloquean el merge
+**Bloquean el merge**
 
 1. Inyección SQL en las cuatro consultas. El id se pega directo al texto del SQL. Alguien puede mandar algo que borre o altere datos. Y ya está fallando hoy sin atacante: un apellido con apóstrofe (O'Neil) rompe la consulta. Eso nos representa un hallazgo de auditoría por PCI DSS. Recuerda que para arreglar eso es usar consultas parametrizadas: WHERE id = ? pasando el valor aparte, en vez de pegarlo en el texto. Así el motor lo trata siempre como dato y nunca como código.
 
-2. Devuelve la cédula al portal. El detalle incluye documento de cada beneficiario. Y SELECT * sobre polizas entrega todas las columnas sin filtrar. Ahi tenemos riesgo de Habeas Data. Debe devolver solo los campos que el portal necesita.
+2. Devuelve la cédula al portal. El detalle incluye documento de cada beneficiario. Y SELECT * sobre polizas entrega todas las columnas sin filtrar. Ahí tenemos riesgo de Habeas Data. Debe devolver solo los campos que el portal necesita.
 
 3. Revienta si un beneficiario no tiene cuenta. cuenta[0].acumulado asume que la fila existe. Si no, error 500.
 
@@ -209,22 +229,22 @@ Bloquean el merge
 ?incluirInactivos=true a la URL y ver beneficiarios dados de baja.
 No hay validación de quién puede hacerlo.
 
-Sugerencias, no bloqueantes:  
+**Sugerencias, no bloqueantes:**
 
 Sumar con SUM() en SQL en vez del bucle en JavaScript
 Resolver el N+1: hoy hace una consulta por cada beneficiario; un JOIN lo resuelve en una
 Validar incluirInactivos como booleano en vez de comparar el texto 'true'
 Revisar el nombre del campo: usa p.valor, pero el esquema dice valor_centavos
 
-Haz las correciones si necesitas ayuda recuerda que tienes como apoyo a Juan (Ing Sr.) y Esteban (Ing Sr.), si estan full yo tengo mañana espacio en calendar de 11-12 agendame y revisamos para montar eso de una. 
+Haz las correcciones y, si necesitas ayuda, recuerda que tienes como apoyo a Juan (Ing. Sr.) y Esteban (Ing. Sr.). Si están full, mañana tengo espacio de 11 a 12 en el calendar: agéndame y lo sacamos. 
 
-## 3C. Priorización (10%)
+### 3C. Priorización (10%)
 
-Yo, el lunes. Arranco por el bug de pagos duplicados, lo primero que hago es pedir los datos para dimensionarlo: cuántos pagos, desde cuándo, cuánto dinero. Sin ese dato no puedo tomar una decisión, puede ser 10 casos o mil, y la respuesta es distinta. En paralelo, reviso agenda disponible y programo un 1:1 que se repita semanal mismo dia misma hora con el ingeniero de los tres sprints. Eso no no lo delego y no puede seguir pasando: si lleva tres sprints así y nadie ha hablado con él, el problema está en la gestión, no en el desempeño.
+**Yo, el lunes.** Arranco por el bug de pagos duplicados, lo primero que hago es pedir los datos para dimensionarlo: cuántos pagos, desde cuándo, cuánto dinero. Sin ese dato no puedo tomar una decisión, puede ser 10 casos o mil, y la respuesta es distinta. En paralelo, reviso agenda disponible y programo un 1:1 semanal recurrente, mismo día y misma hora, con el ingeniero de los tres sprints. Eso no lo delego y no puede seguir pasando: si lleva tres sprints así y nadie ha hablado con él, el problema está en la gestión, no en el desempeño.
 
-Delegaría: El reporte del viernes, con alcance recortado y acordado con el cliente antes de comprometerlo. Con la evidencia de trazabilidad para auditoría: eso es extracción de datos, no requiere criterio de arquitectura, y hay dos semanas, entonces con eso vamos bien.
+**Delego.** El reporte del viernes, con alcance recortado y acordado con el cliente antes de comprometerlo. Con la evidencia de trazabilidad para auditoría: eso es extracción de datos, no requiere criterio de arquitectura, y hay dos semanas, entonces con eso vamos bien.
 
-Aplazaría: La deuda técnica del módulo de pagos, al siguiente sprint, pero eso sí atada al arreglo del bug: porque es el mismo módulo y tocarlo dos veces cuesta más riesgo que hacerlo de una.
+**Aplazo.** La deuda técnica del módulo de pagos, al siguiente sprint, pero eso sí atada al arreglo del bug: porque es el mismo módulo y tocarlo dos veces cuesta más riesgo que hacerlo de una.
 
-Digo que no. La migración a PostgreSQL. Lleva meses sin decidirse pero tampoco se puede seguir postergando, arrancarla en la semana del incendio es una mala decisión. Lo que sí hago es agendar la decisión con fecha a 15 días; pero no la ejecuto ahora.
+**Digo que no.** La migración a PostgreSQL. Lleva meses sin decidirse pero tampoco se puede seguir postergando, arrancarla en la semana del incendio es una mala decisión. Lo que sí hago es agendar la decisión con fecha a 15 días; pero no la ejecuto ahora.
 
