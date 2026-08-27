@@ -88,11 +88,13 @@ export class PagosService {
         .run(pagoId, d.polizaId, d.referenciaExterna, d.valorCentavos, d.canal, periodo, new Date().toISOString());
 
       // Aritmetica entera: ambos operandos son enteros en centavos.
-      const saldoCentavos = poliza.saldo_centavos - d.valorCentavos;
-
       this.db
-        .prepare('UPDATE polizas SET saldo_centavos = ? WHERE id = ?')
-        .run(saldoCentavos, d.polizaId);
+        .prepare('UPDATE polizas SET saldo_centavos = saldo_centavos - ? WHERE id = ?')
+        .run(d.valorCentavos, d.polizaId);
+
+      const { saldo_centavos: saldoCentavos }: any = this.db
+        .prepare('SELECT saldo_centavos FROM polizas WHERE id = ?')
+        .get(d.polizaId);
 
       return { ok: true, pagoId, saldoCentavos, duplicado: false };
     });
