@@ -1,0 +1,22 @@
+# OPCIONAL. Solo si prefieres trabajar contra SQL Server o PostgreSQL
+# en vez de la SQLite que trae el proyecto por defecto.
+#
+#   docker compose up -d sqlserver
+#   docker compose up -d postgres
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Prueba2026!"
+    ports:
+      - "1433:1433"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: prueba
+      POSTGRES_DB: prueba
+    ports:
+      - "5432:5432"

@@ -1,0 +1,32 @@
+{
+  "name": "prueba-tecnica-coordinacion",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Prueba tecnica - Coordinacion de Desarrollo",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "test": "jest --runInBand", 
+    "test:watch": "jest --watch --runInBand",
+    "db:reset": "tsx scripts/reset-db.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "express": "^4.21.0",
+    "luxon": "^3.5.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.13",
+    "@types/luxon": "^3.4.2",
+    "@types/node": "^22.7.0",
+    "@types/supertest": "^6.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.5",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}
