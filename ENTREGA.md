@@ -152,43 +152,49 @@ Agregué en `tests/pagos.spec.ts` la prueba *"persiste el periodo en fecha de ne
 
 Lo primero que decido hacer es paralelizar y lo divido de la siguiente manera en los sprints:
 
-- **Sprint 1 — Construir la paralelización.**  
-Los dos ingenieros van a trabajar juntos sobre la misma pieza: uno se encarga de construir, el otro apoya y también revisa el desarrollo. No los separo en frentes distintos porque, con un equipo de dos personas, dividir produce dos cosas a medias y nos deja sin respaldo si uno falta.
+- **Sprint 1 — Medir y construir la paralelización.**
+
+Los primeros tres días los dedico a medir dónde se van las 6 horas: qué parte es inferencia del modelo, qué parte es entrada/salida, qué parte es base de datos. Son tres días de treinta, y nos evita gastar dos sprints construyendo lo que no ataca el cuello de botella. Con ese dato confirmo que paralelizar es la ruta.  
+
+Los dos ingenieros van a trabajar juntos sobre la misma pieza: uno se encarga de construir, el otro apoya y también revisa el desarrollo. No los separo en frentes distintos porque, con un equipo de dos personas, divididos produce dos cosas a medias y nos deja sin respaldo si uno falta. Despues del segundo sprint evaluo como este el proceso si los puedo dividir uno sigue con el proceso de parametrizacion y el otro inicia el de caché.
 
 El trabajo no es solo partir los 50.000 documentos en rangos, eso nos toma tres o cuatro días. Lo que consume el sprint es el manejo de fallos parciales: qué pasa cuando un worker se cae a mitad del proceso. Sin eso estaría paralelizando un job que se sigue cayendo, y tenemos la experiencia que ya falló dos veces este mes. Al cierre del sprint 1 queda desplegado en producción.
 
 Mientras construimos esta solución, instrumentamos: medimos el tiempo de cada worker y probamos con 2, 4 y 8. Donde la curva de eficiencia deje de mejorar está el límite serial del proceso. No estamos metiendo un sprint extra para perfilar; es el mismo trabajo, midiendo.
 
-- **Sprint 2 — Medir en producción.**  
+- **Sprint 2 — Medir en producción.**
+
 El día 15 es el corte de evaluación, con cinco corridas nocturnas acumuladas. La primera semana ajustamos el número de workers según lo que muestre la curva de eficiencia del sprint 1, y se afina el manejo de fallos con los casos reales que aparezcan, estos siempre son distintos a los previstos en pruebas.
 
 La segunda semana, con la medición en mano, se prepara la caché: medimos qué porcentaje de documentos cambia entre cortes y definimos la estrategia de invalidación. Ese dato es el que decide si la caché vale la pena. Si resulta que el 70% de los documentos cambia cada noche, la caché no sirve y hay que replantear el sprint 3 antes de empezarlo.
 
 - **Sprint 3 — Caché.**
+
+
 Si el sprint 2 mostró que la paralelización alcanzó y los documentos son estables, se implementa la caché con invalidación por hash de contenido más versión de reglas, y se agrega un muestreo del 1% revalidado en fresco cada noche para detectar divergencias.
 
 Si mostró un límite serial, este sprint se dedica a identificarlo y atacarlo. Cachear no arregla un cuello serial, y arrancarlo sabiendo eso sería gastar el último sprint disponible.
 
-En cualquiera de los dos casos dejo la última semana como margen. Un plan de tres sprints lleno al 100% con dos ingenieros es un plan que no cierra.  
+En cualquiera de los dos casos dejo la última semana como margen. Un plan de tres sprints lleno al 100% con dos ingenieros es un plan complejo de cerrar.  
 
 **Qué descarté y por qué**
 
-El modelo más pequeño. Es la única opción que paga un problema de capacidad con moneda de calidad. En validación documental de seguros, perder precisión tiene dos costos: documentos malos aprobados, que es exposición en siniestros y hallazgo regulatorio; y documentos buenos rechazados, que generan retrabajo manual. Ese segundo costo puede consumir más horas de operación de las que ahorra el job.
+El modelo más pequeño. Es la única opción que paga un problema de capacidad con moneda de calidad. Poniendonos en nuestro caso que es validación documental de seguros, perder precisión tiene dos costos: documentos malos aprobados, que es exposición en siniestros y hallazgo regulatorio; y documentos buenos rechazados, que generan retrabajo manual. Ese segundo costo puede consumir más horas de operación de las que ahorra el job.
 
 Lo reconsideraría solo si la medición muestra que la inferencia domina el tiempo y una evaluación sobre nuestra distribución real de documentos demuestra que la precisión se sostiene. No lo descarto por principio, lo descarto como primer movimiento.
 
-Por qué la caché va de segunda y no de primera. La paralelización no cambia ni un resultado de validación. La caché sí puede: si se invalida mal, se valida contra una versión vencida de un documento. En un sistema con exposición regulatoria, primero va lo que no puede dañar la calidad del dato; lo que sí puede, va cuando ya hay medición.
+Por qué la caché va de segunda y no de primera. La paralelización no cambia ni un resultado de validación. La caché sí puede: si se invalida mal, se valida contra una versión vencida de un documento. En un sistema con exposición regulatoria, primero va lo que no puede dañar la calidad del dato; lo que sí puede, va cuando ya tenemos medición.
 
 **¿Cómo sé a los 15 días si funcionó?**
 
 Métrica principal: Usamos los documentos procesados por hora.
 
 Hoy tenemos: 8.333 doc/hora (50.000 en 6 horas)
-La meta: 14.300 doc/hora — equivale a terminar en 3,5 horas
+La meta: 14.300 doc/hora, equivale a terminar en 3,5 horas
 
-Uso la tasa y no el tiempo total porque sobrevive a los cambios de volumen: si el próximo mes son 60.000 documentos, el tiempo sube pero la tasa sigue siendo comparable.
+Uso la tasa y no el tiempo total porque puede sobrevivir a los cambios de volumen: si el próximo mes son 60.000 documentos, el tiempo sube pero la tasa sigue siendo comparable.
 
-El umbral queda fijo en 3,5 horas para tener margen cuando crezca el volumen; por eso no lo dejamos ajustado a las 5 horas de la ventana.
+El umbral queda fijo en 3,5 horas para poder tener margen cuando crezca el volumen; por eso no lo dejamos ajustado a las 5 horas.
 
 Segunda métrica: cero fallos de ejecución en las corridas del periodo, contra los dos de este mes.
 
@@ -203,17 +209,16 @@ Con cinco corridas tenemos señal de tendencia, no una prueba estadística. Si e
 **Riesgo principal y plan B**
 
 
-El riesgo es que la paralelización tope contra un límite que no se resuelve agregando workers: una fracción serial del proceso, un límite de peticiones en la API del modelo, o contención en la base de datos. En ese escenario paso dos sprints y el job sigue sin caber en la ventana.
-
-Es el riesgo que asumo por no dedicar tiempo a perfilar antes. Lo mitigo instrumentando durante la construcción, para que al día 15 sepa no solo cuánto mejoró sino qué lo está frenando.
-
-Plan B: la caché, adelantada al sprint 3 con prioridad completa. Reduce trabajo en lugar de agregar capacidad, así que no depende del límite que haya frenado a los workers. La invalidación va por hash del contenido más versión del conjunto de reglas — sin esa segunda parte, un cambio de reglas dejaría miles de validaciones viejas dadas por buenas.
+El riesgo es que la paralelización tope contra un límite que no se resuelve agregando workers: una fracción serial del proceso, un tope de peticiones en la API del modelo, o contención en la base de datos.  
+Medir los primeros tres días reduce ese riesgo pero no lo elimina: muestra dónde se va el tiempo hoy, no cómo se comporta el sistema en paralelo. Por eso pruebo con 2, 4 y 8 workers durante la construcción: donde la curva deje de mejorar está el techo, y lo veo en el sprint 1, no al día 15.  
+Plan B: la caché, adelantada al sprint 3. Reduce trabajo en lugar de agregar capacidad, así que no depende del límite que frenó a los workers. La invalidación va por hash del contenido más versión de reglas: sin esa segunda parte, un cambio de reglas dejaría miles de validaciones viejas dadas por buenas.
 
 ### 3B. Review de un PR (20%)  
 
 
-Hola Pipe, ya le di una revisada a tu código. El endpoint resuelve bien lo que pidió sales y la estructura de la respuesta está ok. El filtro por activo está bien pensado, solo te falta el control de permisos.  
-Te dejo unos bloqueantes y algunas sugerencias que no bloquean:  
+Hola Pipe, ya le di una revisada a tu código. El endpoint resuelve bien lo que pidió Sales y la estructura de la respuesta está ok. El filtro por activo está bien pensado, solo te falta el control de permisos.
+
+Te dejo unos bloqueantes para que los corrijas y algunas sugerencias que no bloquean:  
 
 Resumiendo son dos temas solamente: parametrizar las consultas y no exponer datos personales. Los otros son validaciones cortas.
 
@@ -238,15 +243,15 @@ Resolver el N+1: hoy hace una consulta por cada beneficiario; un JOIN lo resuelv
 Validar incluirInactivos como booleano en vez de comparar el texto 'true'
 Revisar el nombre del campo: usa p.valor, pero el esquema dice valor_centavos
 
-Haz las correcciones y, si necesitas ayuda, recuerda que tienes como apoyo a Juan (Ing. Sr.) y Esteban (Ing. Sr.). Si están full, mañana tengo espacio de 11 a 12 en el calendar: agéndame y lo sacamos. 
+Haz las correcciones y, si necesitas ayuda, recuerda que tienes como apoyo a Juan (Ing. Sr.) y Esteban (Ing. Sr.). Si están full, mañana tengo espacio de 11 a 12 en el calendar: agéndame y lo sacamos de una. 
 
 ### 3C. Priorización (10%)
 
-**Yo, el lunes.** Arranco por el bug de pagos duplicados, lo primero que hago es pedir los datos para dimensionarlo: cuántos pagos, desde cuándo, cuánto dinero. Sin ese dato no puedo tomar una decisión, puede ser 10 casos o mil, y la respuesta es distinta. En paralelo, reviso agenda disponible y programo un 1:1 semanal recurrente, mismo día y misma hora, con el ingeniero de los tres sprints. Eso no lo delego y no puede seguir pasando: si lleva tres sprints así y nadie ha hablado con él, el problema está en la gestión, no en el desempeño.
+**Yo.** Arranco por el bug de pagos duplicados, lo primero que hago es pedir los datos para dimensionarlo: cuántos pagos, desde cuándo, cuánto dinero. Sin ese dato no puedo tomar una decisión, puede ser 10 casos o mil, y la respuesta es distinta. En paralelo, reviso agenda disponible y programo para hoy un 1:1 que sea semanal, mismo día y misma hora, con el ingeniero de los tres sprints. Eso no lo delego y no puede seguir pasando: si lleva tres sprints así y nadie ha hablado con él, el problema está en la gestión.
 
-**Delego.** El reporte del viernes, con alcance recortado y acordado con el cliente antes de comprometerlo. Con la evidencia de trazabilidad para auditoría: eso es extracción de datos, no requiere criterio de arquitectura, y hay dos semanas, entonces con eso vamos bien.
+**Delego.** El reporte del viernes, con alcance recortado y acordado con el cliente antes de comprometerlo. Con la evidencia de trazabilidad para auditoría: como es extracción de datos, no requiere criterio de arquitectura, y hay 5 dias, entonces con eso vamos bien.
 
-**Aplazo.** La deuda técnica del módulo de pagos, al siguiente sprint, pero eso sí atada al arreglo del bug: porque es el mismo módulo y tocarlo dos veces cuesta más riesgo que hacerlo de una.
+**Aplazo.** La deuda técnica del módulo de pagos, al siguiente sprint, pero eso sí atada al arreglo del bug: porque es el mismo módulo y tocarlo dos veces cuesta más riesgo que hacerlo de una vez.
 
-**Digo que no.** La migración a PostgreSQL. Lleva meses sin decidirse pero tampoco se puede seguir postergando, arrancarla en la semana del incendio es una mala decisión. Lo que sí hago es agendar la decisión con fecha a 15 días; pero no la ejecuto ahora.
+**Digo que no.** La migración a PostgreSQL. Lleva meses sin decidirse pero tampoco se puede seguir postergando, arrancarla esta semana no es una buena decisión. Lo que sí hago es agendar la decisión con fecha a 15 días; pero no la ejecuto ahora.
 
