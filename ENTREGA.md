@@ -118,7 +118,7 @@ El punto clave es el **reintento duplicado → `200`, no `409`**. Devolver un er
 
 Sí, édité `db/schema.sqlite.sql`. Agregué 1 linea: (28) y modifiqué 5: (21, 22, 38, 44 y 45):
 
-<img src="img/evidencia3.png" width="300" style="margin-right: 15px;" alt="Imagen 1">   
+<img src="img/evidencia3.png" width="600" style="margin-right: 40px;" alt="Imagen 6">   
 
 --- 
 
