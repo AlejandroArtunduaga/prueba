@@ -1,6 +1,6 @@
 # Prueba técnica — Coordinación de Desarrollo
 
-**Mario Alejandro Artunduaga Huertas** · 26 de agosto de 2026 · Tiempo invertido: 4.5 horas
+**Mario Alejandro Artunduaga Huertas** · 27 de agosto de 2026 · Tiempo invertido: 4.5 horas
 
 ## Contenido
 
@@ -29,13 +29,15 @@ Parte 2.
 Parte 3.  
 1. Organización del texto sobre las decisiones tomadas para cada caso.
 
+Tambien la use para la ultima organizacion del archivo ENTREGA.md
+
 **Qué dejé fuera y por qué:**
 
-**Parte 1.3.** No ejecuté el archivo heredado ya que no es ejecutable en este paso, está excluido en tsconfig, depende de NestJS/TypeORM/SQL Server no instalados, y consulta columnas que ya no existen en el esquema actual. Si se montaba ese entorno costaba más que el ejercicio completo. La prueba (`tests/legacy.spec.ts`) reproduce el patrón defectuoso sobre una tabla sin la restricción, el saldo baja dos veces, 48M en vez de 49M y luego ejecuta el mismo escenario contra la implementación corregida en src/pagos.service.ts, que sí descuenta una sola vez.
+**Parte 1.3.** No ejecuté el archivo heredado ya que no es ejecutable en este paso, está excluido en tsconfig, depende de NestJS/TypeORM/SQL Server no instalados, y consulta columnas que ya no existen en el esquema actual. Si se montaba ese entorno costaba más que el ejercicio completo. La prueba (`tests/legacy.spec.ts`) reproduce el patrón defectuoso sobre una tabla que no tiene la restricción, el saldo baja dos veces, 48M en vez de 49M y despues ejecuta el mismo escenario contra la implementación corregida en src/pagos.service.ts, que sí descuenta una sola vez.
 
 También dejé fuera la dispersión a beneficiarios: no está entre los requisitos duros y no la verifica ninguna prueba dada. Queda documentada en la Parte 1 como defecto pendiente.
 
-Los nombres de personas en el review de la Parte 3B (Pipe, Juan, Esteban) son supuestos: el PR no indica el nombre del autor.
+Los nombres de personas en el review de la Parte 3B (Pipe, Juan, Esteban) son supuestos ya que el Jr no tenia nombre.
 
 ---
 
@@ -58,7 +60,7 @@ Los nombres de personas en el review de la Parte 3B (Pipe, Juan, Esteban) son su
 | 12 | Rendimiento: consulta N+1 (líneas 72-75) | Cuellos de botella en cierres masivos: múltiples consultas a cuentas dentro de un bucle degradan el servicio. | Refactorizo a una única consulta con `JOIN` entre beneficiarios y cuentas. | Backlog · Reserva |
 | 13 | Evaluación léxica de fechas (líneas 89-90) | Filtros frágiles en informes: la comparación de texto funciona temporalmente pero falla ante cualquier variación de formato. | Tipar/castear la columna a `DATE` y comparar con fechas nativas. | Backlog · Reserva |
 
-### Justificación del corte
+### Justificación
 
 > ¿Por qué esos van hoy y los otros no?
 
@@ -94,7 +96,7 @@ Cada pago que llega de la pasarela trae una `referencia_externa` única. Sobre e
 2. `INSERT` del pago con su `referencia_externa`.
 3. Si el insert tiene éxito → aplico el descuento de saldo, luego `COMMIT`.
 4. Si el insert viola la restricción `UNIQUE` → es un duplicado: `ROLLBACK` de este intento y devuelvo la respuesta de la transacción original ya persistida.
-<img src="img/idempotencia.png" width="450" style="margin-right: 30px;" alt="Imagen 4">
+<img src="img/idempotencia.png" width="450" style="margin-right: 30px;" alt="Imagen 10">
 
   
 **Por qué así y no con un `SELECT` previo:**  
